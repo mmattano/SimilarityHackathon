@@ -50,7 +50,7 @@ hist(df$tanimoto_scores, main="Tanimoto coefficients (all)")
 `cols` specifies the columns that contain the Spectral similarity scores, 
 not the Tanimoto coefficients.
 
-### Calculate correlation
+### Calculate correlation 
 
 ```{r}
 ## for Pearson correlation
@@ -205,7 +205,6 @@ corr_spearman_tanimoto_sort <- sort(corr_spearman_tanimoto, decreasing = TRUE)
 
 corr_spearman_tanimoto_sort[1:10]
 
-
 ## remove the .col (Tanimoto column) with correlation of 1
 corr_spearman_tanimoto_sort <- corr_spearman_tanimoto_sort[!names(corr_spearman_tanimoto_sort) %in% .col]
 
@@ -229,7 +228,7 @@ df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "neuclidean"),
 df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "Neutralloss"), 
     unlist(lapply(strsplit(df_ranks$names, split = "_|[.]csv"), "[", 2)), df_ranks$tolerance)
 df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "Spec2Vec"), NA, df_ranks$tolerance)
-df_ranks$tolerance <- tolerance |>
+df_ranks$tolerance <- df_ranks$tolerance |>
     as.numeric()
 
 
@@ -612,7 +611,7 @@ df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "neuclidean"),
 df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "Neutralloss"), 
     unlist(lapply(strsplit(df_ranks$names, split = "_|[.]csv"), "[", 2)), df_ranks$tolerance)
 df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "Spec2Vec"), NA, df_ranks$tolerance)
-df_ranks$tolerance <- tolerance |>
+df_ranks$tolerance <- df_ranks$tolerance |>
     as.numeric()
 
 
