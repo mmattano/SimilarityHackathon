@@ -68,10 +68,12 @@ def perturb_spetrum_copy(spectrum, perturb_range=[0, 0.5]):
 
     new_spectrum = Spectrum(mz=spectrum.mz,
                     intensities=new_intensities,
-                    metadata={'id': 'None', 'comment': 'this is a copy', 'precursor_mz': spectrum.metadata["precursor_mz"]})
+                    metadata= {**spectrum.metadata, **{'comment': 'this is a copy with perturbed peak intensities', 'perturbation_range': perturb_range}})
 
     return new_spectrum
 
 
 
 
+def perturb_spectral_list(spectra, perturb_range):
+    return [perturb_spetrum_copy(s, perturb_range) for s in spectra]
