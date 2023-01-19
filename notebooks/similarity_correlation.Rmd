@@ -1,0 +1,668 @@
+---
+title: "Correlation_Similarity"
+author: "Thomas Naake"
+date: "2023-01-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load the libraries
+
+```{r}
+library(tidyr)
+library(dplyr)
+library(ComplexHeatmap)
+library(ggplot2)
+```
+
+## Load the dataset
+
+Load the dataset.
+
+```{r }
+df_all <- readr::read_delim("~/GitHub/SimilarityHackathon/data/parameter_tests_NEG_full.csv")
+
+## calculate from distance to similarity for Euclidean/Avdist
+df_all[, grepl("neuclidean", colnames(df_all))] <- 1 - df_all[, grepl("neuclidean", colnames(df_all))]
+df_all[, grepl("navdis", colnames(df_all))] <- 1 - df_all[, grepl("navdis", colnames(df_all))]
+
+## remove the rows where we don't have tanimoto_scores
+df_all <- df_all |>
+    filter(!is.na(tanimoto_scores))
+```
+
+## All the dataset
+
+```{r}
+## remove the pccid and the matching column
+df <- df_all |>
+    select(-c(pccid, matching))
+
+hist(df$tanimoto_scores, main="Tanimoto coefficients (all)")
+```
+
+
+## Correlation between similarity coefficients and Tanimoto
+
+`cols` specifies the columns that contain the Spectral similarity scores, 
+not the Tanimoto coefficients.
+
+### Calculate correlation
+
+```{r}
+## for Pearson correlation
+.cols_remove <- c("id_query", "ref_id") 
+corr_pearson <- df |>
+    select(-all_of(.cols_remove)) |>
+    as.matrix() |>
+    cor(method = "pearson", use = "complete.obs")
+
+## for Spearman correlation
+corr_spearman <- df |> 
+    select(-all_of(.cols_remove)) |>
+    as.matrix() |>
+    cor(method = "spearman", use = "complete.obs")
+
+## extract the information on the Tanimoto coefficient and delete the 
+## respective columns and rows
+
+.col <- "tanimoto_scores" ############################################
+corr_pearson_tanimoto <- corr_pearson[, .col]
+corr_spearman_tanimoto <- corr_spearman[, .col]
+
+.ind_remove <- !colnames(corr_pearson) %in% .col
+corr_pearson <- corr_pearson[.ind_remove, .ind_remove]
+corr_spearman <- corr_spearman[.ind_remove, .ind_remove]
+```
+
+
+Add annotations for rows.
+
+```{r}
+.rn <- rownames(corr_pearson)
+algorithm <- character(length = nrow(corr_pearson))
+tolerance <- numeric(length = nrow(corr_pearson))
+mz_power <- numeric(length = nrow(corr_pearson))
+intensity_power <- numeric(length = nrow(corr_pearson))
+allowed_missing_percentage <- rep(NA, length = nrow(corr_pearson))
+
+## algorithm
+algorithm <- ifelse(grepl("nspecangle", .rn), "Spectral_angle", algorithm)
+algorithm <- ifelse(grepl("cosine", .rn), "Cosine", algorithm)
+algorithm <- ifelse(grepl("navdis", .rn), "Absolute_distance", algorithm)
+algorithm <- ifelse(grepl("neuclidean", .rn), "Euclidean", algorithm)
+algorithm <- ifelse(grepl("Neutralloss", .rn), "Neutral_loss", algorithm)
+algorithm <- ifelse(grepl("Spec2Vec", .rn), "Spec2Vec", algorithm)
+algorithm <- algorithm |>
+    as.character()
+
+## tolerance
+tolerance <- ifelse(grepl("nspecangle", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 8)), tolerance)
+tolerance <- ifelse(grepl("cosine", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 8)), tolerance)
+tolerance <- ifelse(grepl("navdis", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 8)), tolerance)
+tolerance <- ifelse(grepl("neuclidean", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 8)), tolerance)
+tolerance <- ifelse(grepl("Neutralloss", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 2)), tolerance)
+tolerance <- ifelse(grepl("Spec2Vec", .rn), NA, tolerance)
+tolerance <- tolerance |>
+    as.numeric()
+
+## mz_power
+mz_power <- ifelse(grepl("nspecangle", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), mz_power)
+mz_power <- ifelse(grepl("cosine", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), mz_power)
+mz_power <- ifelse(grepl("navdis", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), mz_power)
+mz_power <- ifelse(grepl("neuclidean", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), mz_power)
+mz_power <- ifelse(grepl("Neutralloss", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 3)), mz_power)
+mz_power <- ifelse(grepl("Spec2Vec", .rn), NA, mz_power)
+mz_power <- mz_power |>
+    as.numeric()
+
+## intensity_power
+intensity_power <- ifelse(grepl("nspecangle", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 6)), intensity_power)
+intensity_power <- ifelse(grepl("cosine", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 6)), intensity_power)
+intensity_power <- ifelse(grepl("navdis", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 6)), intensity_power)
+intensity_power <- ifelse(grepl("neuclidean", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 6)), intensity_power)
+intensity_power <- ifelse(grepl("Neutralloss", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), intensity_power)
+intensity_power <- ifelse(grepl("Spec2Vec", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 2)), intensity_power)
+intensity_power <- intensity_power |>
+    as.numeric()
+
+
+## allowed_missing_percentage
+## Spec2Vec
+
+
+column_ha <- HeatmapAnnotation(algorithm = algorithm)
+row_ha <- rowAnnotation( 
+    tolerance = as.factor(tolerance), 
+    mz_power = as.factor(mz_power), 
+    intensity_power = as.factor(intensity_power))
+
+## Pearson coefficients
+Heatmap(mat = corr_pearson, top_annotation = column_ha,
+    right_annotation = row_ha, show_column_names = FALSE, show_row_names = FALSE)
+
+## Spearman coefficients
+Heatmap(mat = corr_spearman, top_annotation = column_ha,
+    right_annotation = row_ha, show_column_names = FALSE, show_row_names = FALSE)
+```
+
+### Scatterplots
+
+
+
+Using `ggplot2`
+
+```{r}
+##sample_prop <- sample(1:nrow(df), ceiling(nrow(df) * 0.2), 
+##    replace = FALSE)
+
+
+df |>##[sample_prop, ] |>
+    ggplot(aes_string(x = colnames(df)[3], y = colnames(df)[4])) +
+    geom_point(cex = 0.2, alpha = 0.2) +
+    geom_smooth(method = "lm") +
+    theme_classic()
+
+df |>##[sample_prop, ] |>
+    ggplot(aes_string(x = colnames(df)[3], y = colnames(df)[99])) +
+    geom_point(cex = 0.2, alpha = 0.2) +
+    geom_smooth(method = "lm") +
+    theme_classic()
+```
+
+
+### Tanimoto against spectral similarities
+
+The last column (`ncol(df)`) contains the Tanimoto score.
+
+```{r}
+df_l <- pivot_longer(df, cols = 4:ncol(df))
+```
+
+Do the actual plotting. Only show the data for the top 5 scores
+
+```{r}
+corr_spearman_tanimoto_sort <- sort(corr_spearman_tanimoto, decreasing = TRUE)
+
+corr_spearman_tanimoto_sort[1:10]
+
+
+## remove the .col (Tanimoto column) with correlation of 1
+corr_spearman_tanimoto_sort <- corr_spearman_tanimoto_sort[!names(corr_spearman_tanimoto_sort) %in% .col]
+
+## create histograms per algorithm that show the rank of the correlation
+df_ranks <- data.frame(
+    corr = sort(corr_spearman_tanimoto_sort, decreasing = T),
+    ranks = order(corr_spearman_tanimoto_sort, decreasing=T),
+    names = names(corr_spearman_tanimoto_sort[order(corr_spearman_tanimoto_sort, decreasing=T)]),
+    tolerance = NA,
+    algorithm = "")
+
+## fill the tolerance
+df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "nspecangle"), 
+     unlist(lapply(strsplit(df_ranks$names, split = "_|[.]csv"), "[", 8)), df_ranks$tolerance)
+df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "cosine"), 
+     unlist(lapply(strsplit(df_ranks$names, split = "_|[.]csv"), "[", 8)), df_ranks$tolerance)
+df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "navdis"), 
+    unlist(lapply(strsplit(df_ranks$names, split = "_|[.]csv"), "[", 8)), df_ranks$tolerance)
+df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "neuclidean"), 
+    unlist(lapply(strsplit(df_ranks$names, split = "_|[.]csv"), "[", 8)), df_ranks$tolerance)
+df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "Neutralloss"), 
+    unlist(lapply(strsplit(df_ranks$names, split = "_|[.]csv"), "[", 2)), df_ranks$tolerance)
+df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "Spec2Vec"), NA, df_ranks$tolerance)
+df_ranks$tolerance <- tolerance |>
+    as.numeric()
+
+
+## fill the algorithm
+df_ranks$algorithm <- ifelse(grepl(df_ranks$names, pattern = "nspecangle"), 
+    "Spectral_angle", df_ranks$algorithm)
+df_ranks$algorithm <- ifelse(grepl(df_ranks$names, pattern = "cosine"), 
+    "Cosine", df_ranks$algorithm)
+df_ranks$algorithm <- ifelse(grepl(df_ranks$names, pattern = "navdis"), 
+    "Absolute_distance", df_ranks$algorithm)
+df_ranks$algorithm <- ifelse(grepl(df_ranks$names, pattern = "neuclidean"), 
+    "Euclidean", df_ranks$algorithm)
+df_ranks$algorithm <- ifelse(grepl(df_ranks$names, pattern = "Neutralloss"), 
+    "Neutral_loss", df_ranks$algorithm)
+df_ranks$algorithm <- ifelse(grepl(df_ranks$names, pattern = "Spec2Vec"), 
+    "Spec2Vec", df_ranks$algorithm)
+
+
+## what does the split explain in the distribution?
+tol_0005 <- df_ranks |>
+    filter(algorithm == "Spectral_angle" & tolerance == 0.005)
+tol_001 <- df_ranks |>
+    filter(algorithm == "Spectral_angle" & tolerance == 0.01)
+boxplot(tol_0005$corr, tol_001$corr, names = c("0.005", "0.01"))
+
+rmarkdown::paged_table(df_ranks)
+
+## do the actual histogram plotting
+df_ranks |>
+    ggplot() +
+    geom_histogram(aes(x = ranks, col = algorithm, fill = algorithm), 
+        alpha = 0.2, position = "identity")
+df_ranks |> 
+    ggplot() +
+    geom_density(aes(x = corr, col = algorithm, fill = algorithm), 
+        alpha = 0.2, position = "identity")
+
+
+## Scatterplot overlaying the top 5 algorithms
+df_l |>
+    filter(name %in% names(corr_spearman_tanimoto_sort[1:5])) |>
+    ggplot() +
+    geom_point(aes(x = tanimoto_scores, y = value, 
+        col = name, group = name), alpha = 0.2) +
+    theme_classic()
+```
+
+
+## Only matching
+
+```{r only_matching}
+## filter the matching
+df <- df_all[df_all$matching, ]
+
+table(df$tanimoto_scores)
+
+## remove the pccid and the matching column
+df <- df |>
+    select(-c(pccid, matching))
+```
+
+
+## Correlation between similarity coefficients and Tanimoto
+
+`cols` specifies the columns that contain the Spectral similarity scores, 
+not the Tanimoto coefficients.
+
+### Calculate correlation
+
+```{r}
+## for Pearson correlation
+.cols_remove <- c("id_query", "ref_id") 
+corr_pearson <- df |>
+    select(-all_of(.cols_remove)) |>
+    as.matrix() |>
+    cor(method = "pearson", use = "complete.obs")
+
+## for Spearman correlation
+corr_spearman <- df |> 
+    select(-all_of(.cols_remove)) |>
+    as.matrix() |>
+    cor(method = "spearman", use = "complete.obs")
+
+## extract the information on the Tanimoto coefficient and delete the 
+## respective columns and rows
+
+.col <- "tanimoto_scores" ############################################
+corr_pearson_tanimoto <- corr_pearson[, .col]
+corr_spearman_tanimoto <- corr_spearman[, .col]
+
+.ind_remove <- !colnames(corr_pearson) %in% .col
+corr_pearson <- corr_pearson[.ind_remove, .ind_remove]
+corr_spearman <- corr_spearman[.ind_remove, .ind_remove]
+```
+
+
+Add annotations for rows.
+
+```{r}
+.rn <- rownames(corr_pearson)
+algorithm <- character(length = nrow(corr_pearson))
+tolerance <- numeric(length = nrow(corr_pearson))
+mz_power <- numeric(length = nrow(corr_pearson))
+intensity_power <- numeric(length = nrow(corr_pearson))
+allowed_missing_percentage <- rep(NA, length = nrow(corr_pearson))
+
+## algorithm
+algorithm <- ifelse(grepl("nspecangle", .rn), "Spectral_angle", algorithm)
+algorithm <- ifelse(grepl("cosine", .rn), "Cosine", algorithm)
+algorithm <- ifelse(grepl("navdis", .rn), "Absolute_distance", algorithm)
+algorithm <- ifelse(grepl("neuclidean", .rn), "Euclidean", algorithm)
+algorithm <- ifelse(grepl("Neutralloss", .rn), "Neutral_loss", algorithm)
+algorithm <- ifelse(grepl("Spec2Vec", .rn), "Spec2Vec", algorithm)
+algorithm <- algorithm |>
+    as.character()
+
+## tolerance
+tolerance <- ifelse(grepl("nspecangle", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 8)), tolerance)
+tolerance <- ifelse(grepl("cosine", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 8)), tolerance)
+tolerance <- ifelse(grepl("navdis", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 8)), tolerance)
+tolerance <- ifelse(grepl("neuclidean", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 8)), tolerance)
+tolerance <- ifelse(grepl("Neutralloss", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 2)), tolerance)
+tolerance <- ifelse(grepl("Spec2Vec", .rn), NA, tolerance)
+tolerance <- tolerance |>
+    as.numeric()
+
+## mz_power
+mz_power <- ifelse(grepl("nspecangle", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), mz_power)
+mz_power <- ifelse(grepl("cosine", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), mz_power)
+mz_power <- ifelse(grepl("navdis", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), mz_power)
+mz_power <- ifelse(grepl("neuclidean", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), mz_power)
+mz_power <- ifelse(grepl("Neutralloss", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 3)), mz_power)
+mz_power <- ifelse(grepl("Spec2Vec", .rn), NA, mz_power)
+mz_power <- mz_power |>
+    as.numeric()
+
+## intensity_power
+intensity_power <- ifelse(grepl("nspecangle", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 6)), intensity_power)
+intensity_power <- ifelse(grepl("cosine", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 6)), intensity_power)
+intensity_power <- ifelse(grepl("navdis", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 6)), intensity_power)
+intensity_power <- ifelse(grepl("neuclidean", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 6)), intensity_power)
+intensity_power <- ifelse(grepl("Neutralloss", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), intensity_power)
+intensity_power <- ifelse(grepl("Spec2Vec", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 2)), intensity_power)
+intensity_power <- intensity_power |>
+    as.numeric()
+
+
+## allowed_missing_percentage
+## Spec2Vec
+
+
+column_ha <- HeatmapAnnotation(algorithm = algorithm)
+row_ha <- rowAnnotation( 
+    tolerance = as.factor(tolerance), 
+    mz_power = as.factor(mz_power), 
+    intensity_power = as.factor(intensity_power))
+
+## Pearson coefficients
+Heatmap(mat = corr_pearson, top_annotation = column_ha,
+    right_annotation = row_ha, show_column_names = FALSE, show_row_names = FALSE)
+
+## Spearman coefficients
+Heatmap(mat = corr_spearman, top_annotation = column_ha,
+    right_annotation = row_ha, show_column_names = FALSE, show_row_names = FALSE)
+```
+
+
+## Only non-matching
+
+```{r}
+## only keep the non-matching
+df <- df_all[!df_all$matching, ]
+
+hist(df$tanimoto_scores, main="Tanimoto coefficients (non-matching)")
+
+## remove the pccid and the matching column
+df <- df |>
+    select(-c(pccid, matching))
+
+```
+
+
+## Correlation between similarity coefficients and Tanimoto
+
+`cols` specifies the columns that contain the Spectral similarity scores, 
+not the Tanimoto coefficients.
+
+### Calculate correlation
+
+```{r}
+## for Pearson correlation
+.cols_remove <- c("id_query", "ref_id") 
+corr_pearson <- df |>
+    select(-all_of(.cols_remove)) |>
+    as.matrix() |>
+    cor(method = "pearson", use = "complete.obs")
+
+## for Spearman correlation
+corr_spearman <- df |> 
+    select(-all_of(.cols_remove)) |>
+    as.matrix() |>
+    cor(method = "spearman", use = "complete.obs")
+
+## extract the information on the Tanimoto coefficient and delete the 
+## respective columns and rows
+
+.col <- "tanimoto_scores" ############################################
+corr_pearson_tanimoto <- corr_pearson[, .col]
+corr_spearman_tanimoto <- corr_spearman[, .col]
+
+.ind_remove <- !colnames(corr_pearson) %in% .col
+corr_pearson <- corr_pearson[.ind_remove, .ind_remove]
+corr_spearman <- corr_spearman[.ind_remove, .ind_remove]
+```
+
+
+Add annotations for rows.
+
+```{r}
+.rn <- rownames(corr_pearson)
+algorithm <- character(length = nrow(corr_pearson))
+tolerance <- numeric(length = nrow(corr_pearson))
+mz_power <- numeric(length = nrow(corr_pearson))
+intensity_power <- numeric(length = nrow(corr_pearson))
+allowed_missing_percentage <- rep(NA, length = nrow(corr_pearson))
+
+## algorithm
+algorithm <- ifelse(grepl("nspecangle", .rn), "Spectral_angle", algorithm)
+algorithm <- ifelse(grepl("cosine", .rn), "Cosine", algorithm)
+algorithm <- ifelse(grepl("navdis", .rn), "Absolute_distance", algorithm)
+algorithm <- ifelse(grepl("neuclidean", .rn), "Euclidean", algorithm)
+algorithm <- ifelse(grepl("Neutralloss", .rn), "Neutral_loss", algorithm)
+algorithm <- ifelse(grepl("Spec2Vec", .rn), "Spec2Vec", algorithm)
+algorithm <- algorithm |>
+    as.character()
+
+## tolerance
+tolerance <- ifelse(grepl("nspecangle", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 8)), tolerance)
+tolerance <- ifelse(grepl("cosine", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 8)), tolerance)
+tolerance <- ifelse(grepl("navdis", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 8)), tolerance)
+tolerance <- ifelse(grepl("neuclidean", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 8)), tolerance)
+tolerance <- ifelse(grepl("Neutralloss", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 2)), tolerance)
+tolerance <- ifelse(grepl("Spec2Vec", .rn), NA, tolerance)
+tolerance <- tolerance |>
+    as.numeric()
+
+## mz_power
+mz_power <- ifelse(grepl("nspecangle", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), mz_power)
+mz_power <- ifelse(grepl("cosine", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), mz_power)
+mz_power <- ifelse(grepl("navdis", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), mz_power)
+mz_power <- ifelse(grepl("neuclidean", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), mz_power)
+mz_power <- ifelse(grepl("Neutralloss", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 3)), mz_power)
+mz_power <- ifelse(grepl("Spec2Vec", .rn), NA, mz_power)
+mz_power <- mz_power |>
+    as.numeric()
+
+## intensity_power
+intensity_power <- ifelse(grepl("nspecangle", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 6)), intensity_power)
+intensity_power <- ifelse(grepl("cosine", .rn), 
+     unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 6)), intensity_power)
+intensity_power <- ifelse(grepl("navdis", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 6)), intensity_power)
+intensity_power <- ifelse(grepl("neuclidean", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 6)), intensity_power)
+intensity_power <- ifelse(grepl("Neutralloss", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 4)), intensity_power)
+intensity_power <- ifelse(grepl("Spec2Vec", .rn), 
+    unlist(lapply(strsplit(.rn, split = "_|[.]csv"), "[", 2)), intensity_power)
+intensity_power <- intensity_power |>
+    as.numeric()
+
+
+## allowed_missing_percentage
+## Spec2Vec
+
+
+column_ha <- HeatmapAnnotation(algorithm = algorithm)
+row_ha <- rowAnnotation( 
+    tolerance = as.factor(tolerance), 
+    mz_power = as.factor(mz_power), 
+    intensity_power = as.factor(intensity_power))
+
+## Pearson coefficients
+Heatmap(mat = corr_pearson, top_annotation = column_ha,
+    right_annotation = row_ha, show_column_names = FALSE, show_row_names = FALSE)
+
+## Spearman coefficients
+Heatmap(mat = corr_spearman, top_annotation = column_ha,
+    right_annotation = row_ha, show_column_names = FALSE, show_row_names = FALSE)
+```
+
+### Scatterplots
+
+
+
+Using `ggplot2`
+
+```{r}
+##sample_prop <- sample(1:nrow(df), ceiling(nrow(df) * 0.2), 
+##    replace = FALSE)
+
+
+df |>##[sample_prop, ] |>
+    ggplot(aes_string(x = colnames(df)[3], y = colnames(df)[4])) +
+    geom_point(cex = 0.2, alpha = 0.2) +
+    geom_smooth(method = "lm") +
+    theme_classic()
+
+df |>##[sample_prop, ] |>
+    ggplot(aes_string(x = colnames(df)[3], y = colnames(df)[99])) +
+    geom_point(cex = 0.2, alpha = 0.2) +
+    geom_smooth(method = "lm") +
+    theme_classic()
+```
+
+
+### Tanimoto against spectral similarities
+
+The last column (`ncol(df)`) contains the Tanimoto score.
+
+```{r}
+df_l <- pivot_longer(df, cols = 4:ncol(df))
+```
+
+Do the actual plotting. Only show the data for the top 5 scores
+
+```{r}
+corr_spearman_tanimoto_sort <- sort(corr_spearman_tanimoto, decreasing = TRUE)
+
+corr_spearman_tanimoto_sort[1:10]
+
+
+## remove the .col (Tanimoto column) with correlation of 1
+corr_spearman_tanimoto_sort <- corr_spearman_tanimoto_sort[!names(corr_spearman_tanimoto_sort) %in% .col]
+
+## create histograms per algorithm that show the rank of the correlation
+df_ranks <- data.frame(
+    corr = sort(corr_spearman_tanimoto_sort, decreasing = T),
+    ranks = order(corr_spearman_tanimoto_sort, decreasing=T),
+    names = names(corr_spearman_tanimoto_sort[order(corr_spearman_tanimoto_sort, decreasing=T)]),
+    tolerance = NA,
+    algorithm = "")
+
+## fill the tolerance
+df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "nspecangle"), 
+     unlist(lapply(strsplit(df_ranks$names, split = "_|[.]csv"), "[", 8)), df_ranks$tolerance)
+df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "cosine"), 
+     unlist(lapply(strsplit(df_ranks$names, split = "_|[.]csv"), "[", 8)), df_ranks$tolerance)
+df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "navdis"), 
+    unlist(lapply(strsplit(df_ranks$names, split = "_|[.]csv"), "[", 8)), df_ranks$tolerance)
+df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "neuclidean"), 
+    unlist(lapply(strsplit(df_ranks$names, split = "_|[.]csv"), "[", 8)), df_ranks$tolerance)
+df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "Neutralloss"), 
+    unlist(lapply(strsplit(df_ranks$names, split = "_|[.]csv"), "[", 2)), df_ranks$tolerance)
+df_ranks$tolerance <- ifelse(grepl(df_ranks$names, pattern = "Spec2Vec"), NA, df_ranks$tolerance)
+df_ranks$tolerance <- tolerance |>
+    as.numeric()
+
+
+## fill the algorithm
+df_ranks$algorithm <- ifelse(grepl(df_ranks$names, pattern = "nspecangle"), 
+    "Spectral_angle", df_ranks$algorithm)
+df_ranks$algorithm <- ifelse(grepl(df_ranks$names, pattern = "cosine"), 
+    "Cosine", df_ranks$algorithm)
+df_ranks$algorithm <- ifelse(grepl(df_ranks$names, pattern = "navdis"), 
+    "Absolute_distance", df_ranks$algorithm)
+df_ranks$algorithm <- ifelse(grepl(df_ranks$names, pattern = "neuclidean"), 
+    "Euclidean", df_ranks$algorithm)
+df_ranks$algorithm <- ifelse(grepl(df_ranks$names, pattern = "Neutralloss"), 
+    "Neutral_loss", df_ranks$algorithm)
+df_ranks$algorithm <- ifelse(grepl(df_ranks$names, pattern = "Spec2Vec"), 
+    "Spec2Vec", df_ranks$algorithm)
+
+
+## what does the split explain in the distribution?
+tol_0005 <- df_ranks |>
+    filter(algorithm == "Spectral_angle" & tolerance == 0.005)
+tol_001 <- df_ranks |>
+    filter(algorithm == "Spectral_angle" & tolerance == 0.01)
+boxplot(tol_0005$corr, tol_001$corr, names = c("0.005", "0.01"))
+
+rmarkdown::paged_table(df_ranks)
+
+## do the actual histogram plotting
+df_ranks |>
+    ggplot() +
+    geom_histogram(aes(x = ranks, col = algorithm, fill = algorithm), 
+        alpha = 0.2, position = "identity")
+df_ranks |> 
+    ggplot() +
+    geom_density(aes(x = corr, col = algorithm, fill = algorithm), 
+        alpha = 0.2, position = "identity")
+
+
+## Scatterplot overlaying the top 5 algorithms
+df_l |>
+    filter(name %in% names(corr_spearman_tanimoto_sort[1:5])) |>
+    ggplot() +
+    geom_point(aes(x = tanimoto_scores, y = value, 
+        col = name, group = name), alpha = 0.2) +
+    theme_classic()
+```
+
+
+
+
+
+
+
